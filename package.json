@@ -1,0 +1,8 @@
+{
+  "name": "app-scaffold",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node --test --experimental-strip-types test/*.test.ts"
+  }
+}

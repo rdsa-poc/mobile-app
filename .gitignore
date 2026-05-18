@@ -1,4 +1,4 @@
 .DS_Store
 .dart_tool
 build
-
+.env.local
