@@ -7,6 +7,10 @@ const pubspecUrl = new URL("../pubspec.yaml", import.meta.url);
 const mainDartUrl = new URL("../lib/main.dart", import.meta.url);
 const readmeUrl = new URL("../README.md", import.meta.url);
 const envExampleUrl = new URL("../.env.example", import.meta.url);
+const manualVerificationUrl = new URL(
+  "../../task-reports/RDS-TASK-016/manual-verification.md",
+  import.meta.url,
+);
 
 // Test: exposes the Flutter app shell and documented startup commands.
 // Validates: RDS-AC-004 (RDS-REQ-016 - Provide a runnable application skeleton for app)
@@ -67,6 +71,7 @@ test("mobile scaffold reports missing configuration keys in the UI", () => {
 test("mobile scaffold defines a placeholder stream list screen", () => {
   const mainDart = readFileSync(mainDartUrl, "utf8");
 
+  assert.match(mainDart, /home: initialStream == null\s*\? StreamListScreen/);
   assert.match(mainDart, /class StreamListScreen extends StatelessWidget/);
   assert.match(mainDart, /Mobile Placeholder Stream List/);
   assert.match(mainDart, /Choose a placeholder stream/);
@@ -75,6 +80,20 @@ test("mobile scaffold defines a placeholder stream list screen", () => {
   assert.match(mainDart, /baseline-smoke-flow/);
   assert.match(mainDart, /quiz-smoke-demo/);
   assert.match(mainDart, /participant-smoke-demo/);
+});
+
+// Test: publishes the current task-local manual verification path for the mobile scaffold.
+// Validates: RDS-AC-004 (RDS-REQ-016 - Provide a runnable application skeleton for app)
+test("mobile scaffold links task-local manual verification instructions", () => {
+  const readme = readFileSync(readmeUrl, "utf8");
+  const manualVerification = readFileSync(manualVerificationUrl, "utf8");
+
+  assert.match(readme, /RDS-TASK-016\/manual-verification\.md/);
+  assert.match(manualVerification, /flutter run -d web-server --web-port 7357/);
+  assert.match(manualVerification, /Mobile Placeholder Stream List/);
+  assert.match(manualVerification, /Smoke Flow Demo Stream/);
+  assert.match(manualVerification, /click or tap `Smoke Flow Demo Stream`/i);
+  assert.match(manualVerification, /Smoke flow id: baseline-smoke-flow/);
 });
 
 // Test: opens a placeholder participant stream detail screen from the list.
