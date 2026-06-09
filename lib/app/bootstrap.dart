@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../entities/stream/placeholder_stream.dart';
 import '../features/streams/model/mock_streams.dart';
 import '../shared/config/runtime_contract.dart';
 import '../shared/data/repositories/application_event_repository.dart';

@@ -29,7 +29,10 @@ Participant-facing Flutter application shell for the live quiz experience.
 - `RADIOSA_BASELINE_MOTD_MESSAGE` is optional for the local baseline shell; when present, the app emits it through the checked-in `/motd/message` repository surface and when absent the baseline message area renders no message text.
 - `../flutter/bin/flutter run` starts the app on the selected device or emulator
 - `../flutter/bin/flutter run -d chrome` starts the shell in a browser when web support is available
+- `../flutter/bin/flutter build apk --debug --dart-define-from-file=../.env` builds a device-installable Android APK from the shared root contract
 - `npm run verify` runs the scaffold checks for this repository
+
+For the full local stack bootstrap from the workspace root, use `../scripts/start-local-stack.sh`. It writes the shared `.env`, starts the Node shells on `0.0.0.0`, and builds the Android APK with the bundled Flutter SDK.
 
 ## Notes
 
