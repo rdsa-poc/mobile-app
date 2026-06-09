@@ -2,3 +2,6 @@
 .dart_tool
 build
 .env.local
+.idea
+.metadata
+app.iml
