@@ -16,7 +16,8 @@ const mockedStreams = <PlaceholderStream>[
     streamId: 'stream-night-quiz',
     title: 'Night Quiz Warmup',
     status: 'Open lobby',
-    summary: 'Static stream entry used to preview the participant join experience.',
+    summary:
+        'Static stream entry used to preview the participant join experience.',
     scheduleLabel: 'Lobby available now',
     smokeFlowId: 'night-quiz-placeholder',
     quizId: 'quiz-night-placeholder',

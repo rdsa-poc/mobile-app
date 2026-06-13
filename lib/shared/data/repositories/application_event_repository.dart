@@ -35,8 +35,9 @@ class HttpApplicationEventPublisher implements ApplicationEventPublisher {
   }
 
   Uri _resolveStartupUri() {
-    final normalizedBaseUrl =
-        baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final normalizedBaseUrl = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
     return Uri.parse('$normalizedBaseUrl$kStartupEventFunctionPath');
   }
 }
