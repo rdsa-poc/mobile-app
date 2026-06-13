@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 
-import '../entities/stream/placeholder_stream.dart';
-import '../features/streams/model/mock_streams.dart';
 import '../shared/config/runtime_contract.dart';
 import '../shared/data/repositories/application_event_repository.dart';
 import '../shared/data/repositories/motd_repository.dart';
+import '../shared/data/repositories/stream_repository.dart';
 import '../shared/state/baseline_participant_controller.dart';
 import 'bootstrap_config.dart';
 import 'radiosa_mobile_app.dart';
 
 void bootstrapRadiosaMobileApp() {
   final config = BootstrapConfig.fromEnvironment();
-  final initialStream = resolveInitialStream(Uri.base);
+  final initialStreamId = resolveInitialStreamId(Uri.base);
 
   runApp(
     config.missingKeys.isEmpty
         ? RadiosaMobileApp(
             config: config,
-            initialStream: initialStream,
+            initialStreamId: initialStreamId,
             controller: BaselineParticipantController(
               startupEventPublisher: HttpApplicationEventPublisher(
                 baseUrl: config.realtimeBaseUrl,
@@ -26,12 +25,16 @@ void bootstrapRadiosaMobileApp() {
                 baselineMessage: config.baselineMotdMessage,
               ),
             ),
+            streamRepository: RealtimeStreamRepository(
+              databaseUrl: config.databaseUrl,
+              namespace: config.databaseNamespace,
+            ),
           )
         : ConfigurationErrorApp(missingKeys: config.missingKeys),
   );
 }
 
-PlaceholderStream? resolveInitialStream(Uri currentUri) {
+String? resolveInitialStreamId(Uri currentUri) {
   final fragment = currentUri.fragment;
   if (fragment.isEmpty) {
     return null;
@@ -44,5 +47,5 @@ PlaceholderStream? resolveInitialStream(Uri currentUri) {
     return null;
   }
 
-  return findPlaceholderStreamById(segments[1]);
+  return segments[1];
 }

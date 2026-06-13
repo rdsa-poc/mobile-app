@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/bootstrap_config.dart';
-import '../../../entities/stream/placeholder_stream.dart';
+import '../../../entities/stream/published_stream.dart';
 import '../../../shared/config/runtime_contract.dart';
 import '../../../shared/data/repositories/application_event_repository.dart';
+import '../../../shared/data/repositories/stream_repository.dart';
 import '../../../shared/state/baseline_participant_controller.dart';
 import '../../../shared/ui/status_badge.dart';
 import '../../motd/widgets/motd_message_card.dart';
@@ -14,135 +15,275 @@ class StreamListScreen extends StatefulWidget {
     super.key,
     required this.config,
     required this.controller,
-    required this.streams,
+    this.showRemovalToastOnStart = false,
+    required this.streamRepository,
   });
 
   final BootstrapConfig config;
   final BaselineParticipantController controller;
-  final List<PlaceholderStream> streams;
+  final bool showRemovalToastOnStart;
+  final StreamRepository streamRepository;
 
   @override
   State<StreamListScreen> createState() => _StreamListScreenState();
 }
 
 class _StreamListScreenState extends State<StreamListScreen> {
+  bool _didShowRemovalToast = false;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   @override
   void initState() {
     super.initState();
     widget.controller.beginStartup();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showRemovalToastIfNeeded();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Radiosa Streams'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          _HeroCard(
-            environmentName: widget.config.environmentName,
-            realtimeBaseUrl: widget.config.realtimeBaseUrl,
-          ),
-          const SizedBox(height: 16),
-          StreamBuilder<String?>(
-            stream: widget.controller.subscribeToMotd(),
-            builder: (context, snapshot) {
-              return MotdMessageCard(
-                message: snapshot.data,
-                path: kMotdMessagePath,
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          AnimatedBuilder(
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        bottomNavigationBar: const _DiscoveryBottomNavigationBar(),
+        body: SafeArea(
+          child: AnimatedBuilder(
             animation: widget.controller,
             builder: (context, _) {
-              return _StartupEventCard(
-                status: widget.controller.startupStatus,
+              return StreamBuilder<String?>(
+                stream: widget.controller.subscribeToMotd(),
+                builder: (context, motdSnapshot) {
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                    children: [
+                      const _BrandedHeader(),
+                      const SizedBox(height: 28),
+                      Text(
+                        'Discover',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Find the right stream for every moment.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color:
+                                  Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 20),
+                      const SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _CategoryChip(label: 'All', selected: true),
+                            SizedBox(width: 10),
+                            _CategoryChip(label: 'Music'),
+                            SizedBox(width: 10),
+                            _CategoryChip(label: 'Talk'),
+                            SizedBox(width: 10),
+                            _CategoryChip(label: 'Sports'),
+                            SizedBox(width: 10),
+                            _CategoryChip(label: 'Chill'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      StreamBuilder<StreamDiscoveryState>(
+                        stream: widget.streamRepository.watchDiscovery(),
+                        builder: (context, snapshot) {
+                          final discoveryState = snapshot.data ??
+                              const StreamDiscoveryState.loading();
+
+                          switch (discoveryState.status) {
+                            case StreamDiscoveryStatus.loading:
+                              return const _LoadingStateCard();
+                            case StreamDiscoveryStatus.empty:
+                              return const _DiscoveryStateCard(
+                                icon: Icons.graphic_eq_rounded,
+                                title: kEmptyStreamsMessage,
+                                description:
+                                    'Published streams will appear here as soon as the realtime discovery projection is available.',
+                              );
+                            case StreamDiscoveryStatus.error:
+                              return const _DiscoveryStateCard(
+                                icon: Icons.wifi_tethering_error_rounded,
+                                title: kEmptyStreamsMessage,
+                                description:
+                                    'We could not refresh live discovery right now, so the screen stays explicit instead of going blank.',
+                              );
+                            case StreamDiscoveryStatus.loaded:
+                              return Column(
+                                children: [
+                                  for (final stream
+                                      in discoveryState.streams) ...[
+                                    _StreamListCard(
+                                      onPressed: () =>
+                                          _openStreamDetail(stream),
+                                      stream: stream,
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ],
+                              );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      _RealtimeSupportPanel(
+                        motdMessage: motdSnapshot.data,
+                        startupStatus: widget.controller.startupStatus,
+                      ),
+                    ],
+                  );
+                },
               );
             },
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Choose a placeholder stream',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'This list is static for the PoC scaffold. Selecting an item opens the future participant stream detail surface.',
-          ),
-          const SizedBox(height: 20),
-          if (widget.streams.isEmpty)
-            const _EmptyStateCard()
-          else
-            for (final stream in widget.streams) ...[
-              _StreamListCard(config: widget.config, stream: stream),
-              const SizedBox(height: 12),
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({
-    required this.environmentName,
-    required this.realtimeBaseUrl,
-  });
-
-  final String environmentName;
-  final String realtimeBaseUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Mobile Placeholder Stream List',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Environment $environmentName is pointed at $realtimeBaseUrl with mocked participant stream data.',
-            ),
-          ],
         ),
       ),
     );
   }
+
+  void _showRemovalToastIfNeeded() {
+    if (!mounted || !widget.showRemovalToastOnStart || _didShowRemovalToast) {
+      return;
+    }
+
+    _didShowRemovalToast = true;
+    _showRemovedStreamToast();
+  }
+
+  Future<void> _openStreamDetail(PublishedStream stream) async {
+    final shouldShowRemovalToast = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => StreamDetailScreen(
+          config: widget.config,
+          discoveryScreenBuilder: (showRemovalToast) => StreamListScreen(
+            config: widget.config,
+            controller: widget.controller,
+            showRemovalToastOnStart: showRemovalToast,
+            streamRepository: widget.streamRepository,
+          ),
+          streamId: stream.streamId,
+          streamRepository: widget.streamRepository,
+        ),
+      ),
+    );
+
+    if (!mounted || shouldShowRemovalToast != true) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      _showRemovedStreamToast();
+    });
+  }
+
+  void _showRemovedStreamToast() {
+    final messenger = _scaffoldMessengerKey.currentState;
+    if (messenger == null) {
+      return;
+    }
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(kRemovedStreamMessage),
+        ),
+      );
+  }
 }
 
-class _StartupEventCard extends StatelessWidget {
-  const _StartupEventCard({
-    required this.status,
-  });
-
-  final StartupEventDispatchStatus status;
+class _BrandedHeader extends StatelessWidget {
+  const _BrandedHeader();
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                height: 24,
+                width: 24,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Icon(
+                  Icons.graphic_eq_rounded,
+                  color: colorScheme.onPrimary,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'radiosa',
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: null,
+          icon: const Icon(Icons.search_rounded),
+          style: IconButton.styleFrom(
+            backgroundColor: colorScheme.surface,
+            disabledBackgroundColor: colorScheme.surface,
+            disabledForegroundColor: colorScheme.onSurface,
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    this.selected = false,
+  });
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: selected ? colorScheme.primary : colorScheme.surface,
+        border: Border.all(
+          color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+        ),
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Startup Event Handoff',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            const Text('Function: onApplicationEvent'),
-            Text('Status: ${status.label}'),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: selected
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
         ),
       ),
     );
@@ -151,44 +292,81 @@ class _StartupEventCard extends StatelessWidget {
 
 class _StreamListCard extends StatelessWidget {
   const _StreamListCard({
-    required this.config,
+    required this.onPressed,
     required this.stream,
   });
 
-  final BootstrapConfig config;
-  final PlaceholderStream stream;
+  final VoidCallback onPressed;
+  final PublishedStream stream;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    final theme = Theme.of(context);
+
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(22),
       child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (context) =>
-                  StreamDetailScreen(config: config, stream: stream),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              StatusBadge(label: stream.status),
-              const SizedBox(height: 12),
-              Text(stream.title, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(stream.summary),
-              const SizedBox(height: 12),
-              Text(
-                stream.scheduleLabel,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+        borderRadius: BorderRadius.circular(22),
+        onTap: onPressed,
+        child: Ink(
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _StreamImage(
+                  imageUrl: stream.imageUrl,
+                  height: 82,
+                  width: 82,
                 ),
-              ),
-            ],
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              stream.title,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const StatusBadge(label: 'LIVE'),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Published stream • Available now',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        stream.summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -196,27 +374,220 @@ class _StreamListCard extends StatelessWidget {
   }
 }
 
-class _EmptyStateCard extends StatelessWidget {
-  const _EmptyStateCard();
+
+class _RealtimeSupportPanel extends StatelessWidget {
+  const _RealtimeSupportPanel({
+    required this.motdMessage,
+    required this.startupStatus,
+  });
+
+  final String? motdMessage;
+  final StartupEventDispatchStatus startupStatus;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'No placeholder streams are available',
-              style: Theme.of(context).textTheme.titleLarge,
+              'Realtime support',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Keep the participant app explicit about missing stream data instead of showing a silent blank state.',
+            Text(
+              'Status: ${startupStatus.label}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            MotdMessageCard(
+              message: motdMessage,
+              path: kMotdMessagePath,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DiscoveryStateCard extends StatelessWidget {
+  const _DiscoveryStateCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border.all(color: colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 48,
+              width: 48,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: colorScheme.primary),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingStateCard extends StatelessWidget {
+  const _LoadingStateCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          children: [
+            const SizedBox(
+              height: 28,
+              width: 28,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Loading streams...',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Connecting to the published discovery projection.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DiscoveryBottomNavigationBar extends StatelessWidget {
+  const _DiscoveryBottomNavigationBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return NavigationBar(
+      height: 74,
+      selectedIndex: 0,
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.explore_outlined),
+          selectedIcon: Icon(Icons.explore_rounded),
+          label: 'Discover',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.favorite_border_rounded),
+          selectedIcon: Icon(Icons.favorite_rounded),
+          label: 'Favorites',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.calendar_today_outlined),
+          selectedIcon: Icon(Icons.calendar_today_rounded),
+          label: 'Schedule',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.person_outline_rounded),
+          selectedIcon: Icon(Icons.person_rounded),
+          label: 'Profile',
+        ),
+      ],
+    );
+  }
+}
+
+class _StreamImage extends StatelessWidget {
+  const _StreamImage({
+    required this.imageUrl,
+    required this.height,
+    this.width = double.infinity,
+  });
+
+  final String imageUrl;
+  final double height;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.network(
+        imageUrl,
+        errorBuilder: (_, __, ___) {
+          return Container(
+            alignment: Alignment.center,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            height: height,
+            width: width,
+            child: const Icon(Icons.radio),
+          );
+        },
+        fit: BoxFit.cover,
+        height: height,
+        width: width,
       ),
     );
   }

@@ -18,7 +18,8 @@ class MotdMessageCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Realtime MOTD', style: Theme.of(context).textTheme.titleLarge),
+            Text('Realtime MOTD',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text('Subscribed path: $path'),
             if (message != null && message!.isNotEmpty) ...[

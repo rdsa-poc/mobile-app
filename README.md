@@ -12,8 +12,8 @@ Participant-facing Flutter application shell for the live quiz experience.
 
 - `lib/app` bootstraps the Flutter shell, configuration, and top-level app runtime.
 - `lib/features/motd` renders the baseline `/motd/message` subscription surface.
-- `lib/features/streams` keeps the placeholder list/detail participant shape required by EP-001.
-- `lib/entities/stream` contains the placeholder participant stream model.
+- `lib/features/streams` renders published discovery and detail flows backed by the mobile realtime projection.
+- `lib/entities/stream` contains the participant stream entities consumed from realtime data.
 - `lib/shared` holds baseline contract constants, local repositories, request clients, state, and reusable UI.
 
 ## Development
@@ -25,6 +25,8 @@ Participant-facing Flutter application shell for the live quiz experience.
   `../flutter/bin/flutter run -d web-server --web-port 7357 --dart-define-from-file=../.env`
 - `RADIOSA_ENVIRONMENT` identifies the local environment name shared across the PoC.
 - `RT_FN_BASE_URL` points to the local realtime shell, which defaults to `http://localhost:5001`.
+- `FIREBASE_DATABASE_EMULATOR_HOST` points the app at the local RTDB emulator, while hosted environments can provide `FIREBASE_DATABASE_URL`.
+- `FIRESTORE_PROJECT_ID` is reused to derive the RTDB emulator namespace `${FIRESTORE_PROJECT_ID}-default-rtdb`.
 - `RADIOSA_APP_ID` defaults to `app`, so the shared root contract does not need a mobile-only app id entry.
 - `RADIOSA_BASELINE_MOTD_MESSAGE` is optional for the local baseline shell; when present, the app emits it through the checked-in `/motd/message` repository surface and when absent the baseline message area renders no message text.
 - `../flutter/bin/flutter run` starts the app on the selected device or emulator
@@ -41,6 +43,7 @@ For the full local stack bootstrap from the workspace root, use `../scripts/star
 - The shell renders an explicit setup error screen when any required shared root `.env` value is missing.
 - The startup runtime invokes `POST ${RT_FN_BASE_URL}/onApplicationEvent` with one `app.startup` event during list-screen initialization.
 - The baseline `/motd/message` read path is expressed in `lib/shared/data/repositories/motd_repository.dart` and rendered through the list-screen MOTD card.
+- Stream discovery subscribes to `/mobile/streams` through `lib/shared/data/repositories/stream_repository.dart` and no longer bootstraps from checked-in mock stream data.
 - Checked-in Flutter widget and integration tests cover the realtime message path and startup handoff, while `npm run verify` audits their presence and traceability from the repository-level entrypoint.
 - Full iOS and macOS Flutter development also requires full Xcode plus CocoaPods on the local machine.
 
